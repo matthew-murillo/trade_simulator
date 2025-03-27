@@ -12,11 +12,8 @@ else:
 
 
 def run(ctf):
-    DIR = os.getcwd()
-    if __name__ == "__main__":
-        PROJECT = os.path.dirname(os.path.dirname(DIR))
-    else:
-        PROJECT = os.path.dirname(DIR)
+    CURRENT = os.path.dirname(os.path.abspath(__file__))
+    PROJECT = os.path.dirname(CURRENT)
     DATA = os.path.join(PROJECT, 'data')
     OUTPUT = os.path.join(PROJECT, 'output')
 
