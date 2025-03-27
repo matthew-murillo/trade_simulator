@@ -138,9 +138,9 @@ if update_happened:
 
 # ✅ Summary of Trade Policy (updates only on double-click and persists)
 if not st.session_state.rules:
-    st.info("No trade policy has been applied.")
+    st.info("No tariffs have been applied.")
 elif st.session_state.summary_visible:
-    st.markdown("### Summary of Applied Policy Rules")
+    st.markdown("### Summary of Counterfactual Tariffs")
     for i, rule in enumerate(st.session_state.rules):
         st.markdown(f"**Tariff {i + 1}:**")
         st.write(
