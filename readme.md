@@ -2,7 +2,7 @@
 
 ## Description
 
-A quantitative general equilibrium trade model based off of Caliendo and Parro 2015. Used the OECD's Inter-Country Input-Output (ICIO) tables to estimate the model. The model is used to simulat different trade policies and their effects on the global economy.
+A quantitative general equilibrium trade model based off of Caliendo and Parro 2015. I use the OECD's Inter-Country Input-Output (ICIO) tables to estimate trade flows. Trade elasticies need to be updated. The model is used to simulat different trade policies and their effects on the global economy.
 
 ## References
 
