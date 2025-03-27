@@ -2,13 +2,8 @@ import sys
 import numpy as np
 import pandas as pd
 import os
-if __name__ == "__main__":
-    # sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
-    from QGE.equilibrium import equilibrium
-    from QGE.data import data
-else:
-    from QGE.equilibrium import equilibrium
-    from QGE.data import data
+from QGE.equilibrium import equilibrium
+from QGE.data import data
 
 
 def run(ctf):
