@@ -13,7 +13,6 @@ def run(ctf):
     OUTPUT = os.path.join(PROJECT, 'output')
 
     BASELINE = 0
-    print(OUTPUT)
 
     if BASELINE:
         # Calibrate baseline data
