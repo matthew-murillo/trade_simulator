@@ -12,7 +12,7 @@ else:
 
 
 def run(ctf):
-    DIR = os.path.dirname(os.path.abspath(__file__))
+    DIR = os.getcwd()
     if __name__ == "__main__":
         PROJECT = os.path.dirname(os.path.dirname(DIR))
     else:
@@ -21,6 +21,7 @@ def run(ctf):
     OUTPUT = os.path.join(PROJECT, 'output')
 
     BASELINE = 0
+    print(OUTPUT)
 
     if BASELINE:
         # Calibrate baseline data
