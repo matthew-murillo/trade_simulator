@@ -1,3 +1,3 @@
 scipy
 pycountry
-matplotlib.pyplot
+matplotlib
