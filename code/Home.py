@@ -33,7 +33,7 @@ st.markdown("- Visualize trade and economic outcomes")
 st.markdown("#### References:")
 st.markdown("- Caliendo, L., Parro, F. (2015) Estimates of the Trade and Welfare Effects of NAFTA, The Review of Economic Studies, 82(1), 1-44.")
 st.markdown(
-    "-OECD. (2023) OECD Inter-Country Input-Output Tables, http://oe.cd/icio")
+    "- OECD. (2023) OECD Inter-Country Input-Output Tables, http://oe.cd/icio")
 
 st.sidebar.markdown("### Sector Codes")
 
