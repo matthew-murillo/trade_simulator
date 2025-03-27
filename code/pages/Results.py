@@ -24,8 +24,7 @@ result_category = st.sidebar.selectbox(
 )
 
 # Display selected result
-st.title(f"{result_category} Results")
-st.write(f"Displaying results for {result_category}...")
+st.title(f"{result_category}")
 
 # ✅ Use `.get()` to prevent crashes if results do not exist
 results = st.session_state.get("results", None)
