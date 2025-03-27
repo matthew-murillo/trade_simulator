@@ -16,7 +16,6 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 st.title("Results")
-st.subheader("Welcome to the Tariff Impact Simulation Tool")
 # Create a dropdown at the top left
 st.sidebar.title("Select Results Category")
 result_category = st.sidebar.selectbox(
@@ -43,7 +42,6 @@ else:
 
     # Placeholder for showing results dynamically (replace with actual data processing logic)
     if result_category == "Production":
-        st.write("Production data visualization goes here.")
 
         # Create a dropdown for selecting either "All Countries" or a specific country
         selection_options = ["All Countries"] + list(p['c'])
@@ -141,7 +139,6 @@ else:
             st.plotly_chart(fig, use_container_width=True)
 
     elif result_category == "Imports":
-        st.write("Imports data visualization goes here.")
 
         # Create a dropdown for selecting either "All Countries" or a specific country
         selection_options = ["All Countries"] + list(p['c'])
@@ -224,7 +221,7 @@ else:
                 st.plotly_chart(fig, use_container_width=True)
 
     elif result_category == "Exports":
-        st.write("Exports data visualization goes here.")
+
         # Create a dropdown for selecting either "All Countries" or a specific country
         selection_options = ["All Countries"] + list(p['c'])
         selected_option = st.selectbox("Choose a view:", selection_options)
@@ -306,7 +303,7 @@ else:
                 st.plotly_chart(fig, use_container_width=True)
 
     elif result_category == "Labor":
-        st.write("Employment Allocation")
+
         # Create a dropdown for selecting either "All Countries" or a specific country
         selection_options = ["All Countries"] + list(p['c'])
         selected_option = st.selectbox("Choose a view:", selection_options)
@@ -337,7 +334,6 @@ else:
                 pct_change_label="% Change")
             st.plotly_chart(fig, use_container_width=True)
     elif result_category == "Welfare":
-        st.write("Welfare data visualization goes here.")
 
         st.write("Displaying results for all countries...")
         income_hat = results['In'] / baseline['In']
