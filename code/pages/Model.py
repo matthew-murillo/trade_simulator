@@ -28,10 +28,9 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-ROOT = os.path.dirname(os.path.abspath(__file__))
-PROJECT = os.path.dirname(os.path.dirname(ROOT))
-DATA = os.path.join(PROJECT, 'data')
+PROJECT = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
 OUTPUT = os.path.join(PROJECT, 'output')
+DATA = os.path.join(PROJECT, 'data')
 
 dictionary = pd.read_csv(os.path.join(DATA, 'dictionary.csv'))
 c = dictionary['country'].dropna()
