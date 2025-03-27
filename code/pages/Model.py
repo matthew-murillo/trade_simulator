@@ -28,8 +28,8 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-DIR = os.getcwd()
-PROJECT = os.path.dirname(DIR)
+ROOT = os.path.dirname(os.path.abspath(__file__))
+PROJECT = os.path.dirname(os.path.dirname(ROOT))
 DATA = os.path.join(PROJECT, 'data')
 OUTPUT = os.path.join(PROJECT, 'output')
 
