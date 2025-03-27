@@ -69,8 +69,9 @@ def run(ctf):
                 d['tau_hat'][np.ix_(importers, exporters, sectors)] = 1 / \
                     d['tau'][np.ix(importers, exporters, sectors)]
 
-            # Removing all own-country tariffs
-            d['tau_hat'][np.ix_(importers, importers, sectors)] = 1
+            for i in importers:
+                for s in sectors:
+                    d['tau_hat'][i, i, s] = 1
 
         d['taup'] = d['tau_hat']*d['tau']
         counterfactual = equilibrium(d, p)
