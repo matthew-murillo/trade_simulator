@@ -3,7 +3,7 @@ import numpy as np
 import pandas as pd
 import os
 if __name__ == "__main__":
-    sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
+    # sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
     from QGE.equilibrium import equilibrium
     from QGE.data import data
 else:
@@ -13,7 +13,7 @@ else:
 
 def run(ctf):
     CURRENT = os.path.dirname(os.path.abspath(__file__))
-    PROJECT = os.path.dirname(CURRENT)
+    PROJECT = os.path.dirname(os.path.dirname(CURRENT))
     DATA = os.path.join(PROJECT, 'data')
     OUTPUT = os.path.join(PROJECT, 'output')
 
