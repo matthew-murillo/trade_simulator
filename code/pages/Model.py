@@ -36,7 +36,7 @@ dictionary = pd.read_csv(os.path.join(DATA, 'dictionary.csv'))
 c = dictionary['country'].dropna()
 s = dictionary['sector'].dropna()
 
-st.title("Trade Model")
+st.title("The Model")
 
 if "results" not in st.session_state:
     st.session_state.results = None
@@ -136,9 +136,9 @@ if update_happened:
     time.sleep(1)
     success_placeholder.empty()
 
-# ✅ Summary of Applied Policy Rules (updates only on double-click and persists)
+# ✅ Summary of Trade Policy (updates only on double-click and persists)
 if not st.session_state.rules:
-    st.info("No tariff rules have been applied.")
+    st.info("No trade policy has been applied.")
 elif st.session_state.summary_visible:
     st.markdown("### Summary of Applied Policy Rules")
     for i, rule in enumerate(st.session_state.rules):
@@ -177,39 +177,42 @@ for rule in st.session_state.rules:
 
 st.markdown("---")
 
-if st.button("Run Model"):
-    class StreamlitLogger(io.StringIO):
-        """ Custom StringIO class to continuously overwrite the same line in Streamlit. """
+c4, c5 = st.columns(2)
 
-        def __init__(self, container):
-            super().__init__()
-            self.container = container
+with c4:
+    if st.button("Run Model"):
+        class StreamlitLogger(io.StringIO):
+            """ Custom StringIO class to continuously overwrite the same line in Streamlit. """
 
-        def write(self, message):
-            """ Override write method to replace the log text instead of appending. """
-            if message.strip():  # Ignore empty lines
-                # Replace text instead of appending
-                self.container.text(message.strip())
+            def __init__(self, container):
+                super().__init__()
+                self.container = container
 
-        def flush(self):
-            pass  # No need to flush since updates happen live
+            def write(self, message):
+                """ Override write method to replace the log text instead of appending. """
+                if message.strip():  # Ignore empty lines
+                    # Replace text instead of appending
+                    self.container.text(message.strip())
 
-    log_container = st.empty()  # ✅ This will hold a single dynamic output line
+            def flush(self):
+                pass  # No need to flush since updates happen live
 
-    # Redirect stdout for dynamic logs
-    sys.stdout = StreamlitLogger(log_container)
+        log_container = st.empty()  # ✅ This will hold a single dynamic output line
 
-    # ✅ Run model and store results in session state
-    model_results = run(index_policy_dict)
+        # Redirect stdout for dynamic logs
+        sys.stdout = StreamlitLogger(log_container)
 
-    if model_results:
-        st.session_state.results, st.session_state.d, st.session_state.p = model_results
-        st.session_state.model_ran = True  # Mark model as run
-        st.success("Model run complete.")
+        # ✅ Run model and store results in session state
+        model_results = run(index_policy_dict)
 
-    sys.stdout = sys.__stdout__
+        if model_results:
+            st.session_state.results, st.session_state.d, st.session_state.p = model_results
+            st.session_state.model_ran = True  # Mark model as run
+            st.success("Model run complete.")
 
+        sys.stdout = sys.__stdout__
 
-# Navigation button to Results page
-if st.button("Go to Results"):
-    st.switch_page("pages/Results.py")
+with c5:
+    # Navigation button to Results page
+    if st.button("Go to Results"):
+        st.switch_page("pages/Results.py")
