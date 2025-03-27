@@ -198,7 +198,7 @@ if st.button("Run Model"):
     log_container = st.empty()  # ✅ This will hold a single dynamic output line
 
     # Redirect stdout for dynamic logs
-    sys.stdout = StreamlitLogger(log_container)
+    # sys.stdout = StreamlitLogger(log_container)
 
     # ✅ Run model and store results in session state
     model_results = run(index_policy_dict)

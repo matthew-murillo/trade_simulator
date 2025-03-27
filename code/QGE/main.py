@@ -35,6 +35,8 @@ def run(ctf):
 
     else:
         # Load baseline data
+        print("Looking for:", os.path.join(OUTPUT, 'p.npy'))
+        print("Exists?", os.path.exists(os.path.join(OUTPUT, 'p.npy')))
         p = np.load(os.path.join(OUTPUT, 'p.npy'), allow_pickle=True).item()
         d = np.load(os.path.join(OUTPUT, 'baseline', 'd.npy'),
                     allow_pickle=True).item()
