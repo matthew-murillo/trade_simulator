@@ -18,6 +18,6 @@ This is a multi-county, multi-sector, quantitative general equilibrium trade mod
 """)
 
 st.markdown("#### What you can do:")
-st.markdown("- Set up multiple custom trade scenarios")
+st.markdown("- Experiment with different trade policies")
 st.markdown("- Simulate their economic impact")
 st.markdown("- Visualize trade and economic outcomes")
