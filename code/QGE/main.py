@@ -12,7 +12,7 @@ else:
 
 
 def run(ctf):
-    DIR = os.getcwd()
+    DIR = os.path.dirname(os.path.abspath(__file__))
     if __name__ == "__main__":
         PROJECT = os.path.dirname(os.path.dirname(DIR))
     else:
@@ -21,7 +21,6 @@ def run(ctf):
     OUTPUT = os.path.join(PROJECT, 'output')
 
     BASELINE = 0
-    print(OUTPUT)
 
     if BASELINE:
         # Calibrate baseline data
@@ -35,8 +34,6 @@ def run(ctf):
 
     else:
         # Load baseline data
-        print("Looking for:", os.path.join(OUTPUT, 'p.npy'))
-        print("Exists?", os.path.exists(os.path.join(OUTPUT, 'p.npy')))
         p = np.load(os.path.join(OUTPUT, 'p.npy'), allow_pickle=True).item()
         d = np.load(os.path.join(OUTPUT, 'baseline', 'd.npy'),
                     allow_pickle=True).item()
