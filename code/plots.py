@@ -4,15 +4,15 @@ import plotly.express as px
 import plotly.graph_objects as go
 
 
-BASELINE_COLOR = "#355c7d"
-COUNTERFACTUAL_COLOR = "#c95c2b"
-POSITIVE_COLOR = "#2f7d59"
-NEGATIVE_COLOR = "#b4493f"
-NEUTRAL_COLOR = "#c7b9a5"
-TOTAL_COLOR = "#18242d"
-GRID_COLOR = "rgba(24, 36, 45, 0.12)"
+BASELINE_COLOR = "#2f5fe3"
+COUNTERFACTUAL_COLOR = "#15a9d7"
+POSITIVE_COLOR = "#0f9f7a"
+NEGATIVE_COLOR = "#db5c7a"
+NEUTRAL_COLOR = "#b8c7df"
+TOTAL_COLOR = "#10233c"
+GRID_COLOR = "rgba(16, 35, 60, 0.12)"
 PAPER_BG = "rgba(255,255,255,0)"
-PLOT_BG = "rgba(255,251,246,0.55)"
+PLOT_BG = "rgba(255,255,255,0.56)"
 
 
 def _base_layout(title, xaxis_label, yaxis_label):
@@ -41,7 +41,7 @@ def _base_layout(title, xaxis_label, yaxis_label):
         margin=dict(l=30, r=20, t=65, b=30),
         paper_bgcolor=PAPER_BG,
         plot_bgcolor=PLOT_BG,
-        font=dict(color="#18242d"),
+        font=dict(color="#10233c"),
         hoverlabel=dict(bgcolor="white"),
     )
 
@@ -214,9 +214,9 @@ def plot_trade_map(
         color="trade_flow",
         hover_name="country_name",
         color_continuous_scale=[
-            [0.0, "#7f2f2b"],
-            [0.5, "#f6f0e6"],
-            [1.0, "#1f7a4d"],
+            [0.0, "#db5c7a"],
+            [0.5, "#f7fbff"],
+            [1.0, "#0f9f7a"],
         ],
         range_color=color_range,
         color_continuous_midpoint=0,
@@ -229,7 +229,7 @@ def plot_trade_map(
         countrycolor="white",
         showcoastlines=False,
         showland=True,
-        landcolor="#f4efe8",
+        landcolor="#edf5ff",
         showframe=False,
         showlakes=False,
     )
@@ -248,7 +248,7 @@ def plot_trade_map(
             thickness=12,
             tickformat=".2f",
         ),
-        font=dict(color="#18242d"),
+        font=dict(color="#10233c"),
         paper_bgcolor=PAPER_BG,
         plot_bgcolor=PLOT_BG,
     )

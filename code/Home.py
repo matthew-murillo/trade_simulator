@@ -84,31 +84,42 @@ with model_tab:
 
     st.markdown(
         """
-        1. **Input cost bundle**
+        <div class="equation-card">
+            <p><strong>1. Input cost bundle</strong></p>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+    st.latex(r"\hat{c}_n^j = \hat{w}_n^{\gamma_n^j}\prod_{k=1}^J(\hat{P}_n^k)^{\gamma_n^{k,j}}")
 
-        $$
-        \hat{c}_n^j = \hat{w}_n^{\gamma_n^j}\prod_{k=1}^J(\hat{P}_n^k)^{\gamma_n^{k,j}}
-        $$
-
-        2. **Price index**
-
-        $$
-        \hat{P}_n^j = \left[\sum_{i=1}^N \pi_{ni}^j\left(\hat{\tau}_{ni}^j\hat{c}_i^j\right)^{-\theta^j}\right]^{-1/\theta^j}
-        $$
-
-        3. **Bilateral trade shares**
-
-        $$
-        \hat{\pi}_{ni}^j = \left[\frac{\hat{\tau}_{ni}^j\hat{c}_i^j}{\hat{P}_n^j}\right]^{-\theta^j}
-        $$
-
-        4. **Expenditure recursion**
-
-        $$
-        X_n^{j\prime} = \sum_{k=1}^J \gamma_n^{k,j}\sum_{i=1}^N X_i^{k\prime}
-        \frac{\pi_{in}^{k\prime}}{\tau_{in}^{k\prime}}
-        + \alpha_n^j\left(\hat{w}_n w_nL_n + \sum_{j=1}^J\sum_{i=1}^N X_n^{j\prime}
-        (\tau_{ni}^{j\prime}-1)\frac{\pi_{ni}^{j\prime}}{\tau_{ni}^{j\prime}} + D_n\right)
-        $$
+    st.markdown(
         """
+        <div class="equation-card">
+            <p><strong>2. Price index</strong></p>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+    st.latex(r"\hat{P}_n^j = \left[\sum_{i=1}^N \pi_{ni}^j \left(\hat{\tau}_{ni}^j \hat{c}_i^j\right)^{-\theta^j}\right]^{-1/\theta^j}")
+
+    st.markdown(
+        """
+        <div class="equation-card">
+            <p><strong>3. Bilateral trade shares</strong></p>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+    st.latex(r"\hat{\pi}_{ni}^j = \left[\frac{\hat{\tau}_{ni}^j \hat{c}_i^j}{\hat{P}_n^j}\right]^{-\theta^j}")
+
+    st.markdown(
+        """
+        <div class="equation-card">
+            <p><strong>4. Expenditure recursion</strong></p>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+    st.latex(
+        r"X_n^{j\prime} = \sum_{k=1}^J \gamma_n^{k,j}\sum_{i=1}^N X_i^{k\prime}\frac{\pi_{in}^{k\prime}}{\tau_{in}^{k\prime}} + \alpha_n^j\left(\hat{w}_n w_nL_n + \sum_{j=1}^J\sum_{i=1}^N X_n^{j\prime}(\tau_{ni}^{j\prime}-1)\frac{\pi_{ni}^{j\prime}}{\tau_{ni}^{j\prime}} + D_n\right)"
     )

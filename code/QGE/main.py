@@ -2,6 +2,8 @@ import sys
 import numpy as np
 import pandas as pd
 import os
+import copy
+from functools import lru_cache
 from QGE.equilibrium import equilibrium
 from QGE.data import data
 
@@ -25,6 +27,16 @@ def _iter_counterfactual_rules(ctf, p):
             }
 
 
+@lru_cache(maxsize=1)
+def _load_calibrated_state(output_dir):
+    p = np.load(os.path.join(output_dir, 'p.npy'), allow_pickle=True).item()
+    d = np.load(os.path.join(output_dir, 'baseline', 'd.npy'),
+                allow_pickle=True).item()
+    baseline = np.load(os.path.join(output_dir, 'baseline',
+                                    'baseline.npy'), allow_pickle=True).item()
+    return p, d, baseline
+
+
 def run(ctf):
     CURRENT = os.path.dirname(os.path.abspath(__file__))
     PROJECT = os.path.dirname(os.path.dirname(CURRENT))
@@ -45,11 +57,9 @@ def run(ctf):
 
     else:
         # Load baseline data
-        p = np.load(os.path.join(OUTPUT, 'p.npy'), allow_pickle=True).item()
-        d = np.load(os.path.join(OUTPUT, 'baseline', 'd.npy'),
-                    allow_pickle=True).item()
-        baseline = np.load(os.path.join(OUTPUT, 'baseline',
-                                        'baseline.npy'),    allow_pickle=True).item()
+        p, d, baseline = (
+            copy.deepcopy(obj) for obj in _load_calibrated_state(OUTPUT)
+        )
         d.update({
             'X': baseline['X'],
             'GO': baseline['GO'],

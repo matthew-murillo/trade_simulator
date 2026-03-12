@@ -78,9 +78,17 @@ if results is None or baseline is None or p is None:
     st.stop()
 
 countries = np.asarray(p['c'])
-sectors = np.asarray(p['s'])
 country_lookup = {code: country_label_map.get(code, code) for code in countries}
 country_names = [country_name_map.get(code, code) for code in countries]
+
+if len(catalog['sectors']) == len(p['s']):
+    sector_codes = np.asarray(catalog['sectors']['code'])
+    sector_names = np.asarray(catalog['sectors']['name'])
+    sector_lookup = dict(zip(catalog['sectors']['code'], catalog['sectors']['label']))
+else:
+    sector_codes = np.asarray(p['s'])
+    sector_names = np.asarray(p['s'])
+    sector_lookup = {code: code for code in sector_codes}
 
 if rules:
     with st.expander("Scenario summary", expanded=False):
@@ -224,7 +232,8 @@ if category == "Production":
         )
         country_idx = int(np.where(countries == selected_country)[0][0])
         sector_frame = pd.DataFrame({
-            'Sector': sectors,
+            'Sector code': sector_codes,
+            'Sector': sector_names,
             'Baseline output': baseline['GO'][:, country_idx],
             'Counterfactual output': results['GO'][:, country_idx],
         })
@@ -271,7 +280,7 @@ if category == "Production":
             )
 
         active_table = _sort_abs(
-            sector_frame[['Sector', 'Baseline output', 'Counterfactual output', 'Nominal output %', 'Price %', 'Real output %']],
+            sector_frame[['Sector code', 'Sector', 'Baseline output', 'Counterfactual output', 'Nominal output %', 'Price %', 'Real output %']],
             'Real output %',
         )
 
@@ -307,7 +316,8 @@ elif category == "Imports":
         )
         country_idx = int(np.where(countries == selected_country)[0][0])
         sector_frame = pd.DataFrame({
-            'Sector': sectors,
+            'Sector code': sector_codes,
+            'Sector': sector_names,
             'Imports %': pct_change(results['Im'][:, country_idx], baseline['Im'][:, country_idx]),
             'Baseline imports': baseline['Im'][:, country_idx],
             'Counterfactual imports': results['Im'][:, country_idx],
@@ -327,16 +337,17 @@ elif category == "Imports":
 
         sector_choice = st.selectbox(
             "Partner map sector",
-            options=["All sectors"] + list(sectors),
+            options=["All sectors"] + list(sector_codes),
+            format_func=lambda code: sector_lookup.get(code, code),
             key='imports_partner_sector',
         )
         if sector_choice == "All sectors":
             partner_pct = pct_change(np.sum(results['xbilat'], axis=2), np.sum(baseline['xbilat'], axis=2))
             sector_label = None
         else:
-            sector_idx = int(np.where(sectors == sector_choice)[0][0])
+            sector_idx = int(np.where(sector_codes == sector_choice)[0][0])
             partner_pct = pct_change(results['xbilat'][:, :, sector_idx], baseline['xbilat'][:, :, sector_idx])
-            sector_label = sector_choice
+            sector_label = sector_lookup.get(sector_choice, sector_choice)
         np.fill_diagonal(partner_pct, 0.0)
 
         partner_frame = pd.DataFrame({
@@ -358,7 +369,7 @@ elif category == "Imports":
         )
 
         active_table = _sort_abs(
-            sector_frame[['Sector', 'Baseline imports', 'Counterfactual imports', 'Imports %']],
+            sector_frame[['Sector code', 'Sector', 'Baseline imports', 'Counterfactual imports', 'Imports %']],
             'Imports %',
         )
         st.markdown("#### Partner detail")
@@ -396,7 +407,8 @@ elif category == "Exports":
         )
         country_idx = int(np.where(countries == selected_country)[0][0])
         sector_frame = pd.DataFrame({
-            'Sector': sectors,
+            'Sector code': sector_codes,
+            'Sector': sector_names,
             'Exports %': pct_change(results['Ex'][:, country_idx], baseline['Ex'][:, country_idx]),
             'Baseline exports': baseline['Ex'][:, country_idx],
             'Counterfactual exports': results['Ex'][:, country_idx],
@@ -416,16 +428,17 @@ elif category == "Exports":
 
         sector_choice = st.selectbox(
             "Partner map sector",
-            options=["All sectors"] + list(sectors),
+            options=["All sectors"] + list(sector_codes),
+            format_func=lambda code: sector_lookup.get(code, code),
             key='exports_partner_sector',
         )
         if sector_choice == "All sectors":
             partner_pct = pct_change(np.sum(results['xbilat'], axis=2), np.sum(baseline['xbilat'], axis=2))
             sector_label = None
         else:
-            sector_idx = int(np.where(sectors == sector_choice)[0][0])
+            sector_idx = int(np.where(sector_codes == sector_choice)[0][0])
             partner_pct = pct_change(results['xbilat'][:, :, sector_idx], baseline['xbilat'][:, :, sector_idx])
-            sector_label = sector_choice
+            sector_label = sector_lookup.get(sector_choice, sector_choice)
         np.fill_diagonal(partner_pct, 0.0)
 
         partner_frame = pd.DataFrame({
@@ -447,7 +460,7 @@ elif category == "Exports":
         )
 
         active_table = _sort_abs(
-            sector_frame[['Sector', 'Baseline exports', 'Counterfactual exports', 'Exports %']],
+            sector_frame[['Sector code', 'Sector', 'Baseline exports', 'Counterfactual exports', 'Exports %']],
             'Exports %',
         )
         st.markdown("#### Partner detail")
@@ -500,7 +513,8 @@ elif category == "Labor":
         sector_value_added_hat = safe_divide(results['VAnj'][:, country_idx], baseline['VAnj'][:, country_idx])
         sector_employment_hat = safe_divide(sector_value_added_hat, results['w_hat'][country_idx])
         sector_frame = pd.DataFrame({
-            'Sector': sectors,
+            'Sector code': sector_codes,
+            'Sector': sector_names,
             'Value added %': np.nan_to_num((sector_value_added_hat - 1.0) * 100.0),
             'Employment %': np.nan_to_num((sector_employment_hat - 1.0) * 100.0),
         })
@@ -530,7 +544,10 @@ elif category == "Labor":
                 use_container_width=True,
             )
 
-        active_table = _sort_abs(sector_frame, 'Employment %')
+        active_table = _sort_abs(
+            sector_frame[['Sector code', 'Sector', 'Value added %', 'Employment %']],
+            'Employment %',
+        )
 
 else:
     welfare_frame = country_summary[[

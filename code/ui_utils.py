@@ -1,4 +1,5 @@
 import os
+from functools import lru_cache
 
 import numpy as np
 import pandas as pd
@@ -10,47 +11,55 @@ def inject_base_styles():
         """
         <style>
             :root {
-                --canvas: #f5efe5;
-                --panel: rgba(255, 252, 247, 0.88);
-                --panel-strong: rgba(255, 249, 241, 0.96);
-                --ink: #18242d;
-                --muted: #5f6c73;
-                --line: #d9cfc1;
-                --accent: #bf5b2b;
-                --accent-deep: #8e3f1d;
-                --accent-soft: #f8e1d4;
-                --good: #1f7a4d;
-                --bad: #a33f32;
+                --canvas: #eef4ff;
+                --panel: rgba(255, 255, 255, 0.74);
+                --panel-strong: rgba(255, 255, 255, 0.9);
+                --ink: #10233c;
+                --muted: #5b6f88;
+                --line: rgba(133, 154, 191, 0.28);
+                --accent: #326bff;
+                --accent-deep: #1742a0;
+                --accent-soft: rgba(50, 107, 255, 0.12);
+                --good: #0f9f7a;
+                --bad: #db5c7a;
             }
 
             .stApp {
                 background:
-                    radial-gradient(circle at top left, rgba(191, 91, 43, 0.10), transparent 30%),
-                    radial-gradient(circle at top right, rgba(24, 36, 45, 0.08), transparent 26%),
-                    linear-gradient(180deg, #f8f3ea 0%, var(--canvas) 100%);
+                    radial-gradient(circle at top left, rgba(50, 107, 255, 0.16), transparent 28%),
+                    radial-gradient(circle at top right, rgba(0, 196, 204, 0.13), transparent 24%),
+                    linear-gradient(180deg, #f6faff 0%, var(--canvas) 52%, #edf3fb 100%);
                 color: var(--ink);
+                font-family: "Avenir Next", "Segoe UI", "Helvetica Neue", sans-serif;
             }
 
             .block-container {
-                padding-top: 1.1rem;
+                padding-top: 3.15rem;
                 padding-bottom: 3.5rem;
                 padding-left: 2rem;
                 padding-right: 2rem;
                 max-width: 1320px;
             }
 
+            div[data-testid="stAppViewBlockContainer"] > div:first-child {
+                padding-top: 3.15rem;
+            }
+
             .hero-card,
             .section-card {
                 background: var(--panel);
-                border: 1px solid rgba(217, 207, 193, 0.9);
-                border-radius: 22px;
-                box-shadow: 0 18px 50px rgba(24, 36, 45, 0.08);
-                backdrop-filter: blur(12px);
+                border: 1px solid var(--line);
+                border-radius: 24px;
+                box-shadow: 0 24px 60px rgba(20, 42, 77, 0.12);
+                backdrop-filter: blur(18px);
             }
 
             .hero-card {
-                padding: 1.5rem 1.6rem 1.35rem 1.6rem;
-                margin-bottom: 1rem;
+                padding: 1.8rem 1.8rem 1.6rem 1.8rem;
+                margin-bottom: 1.1rem;
+                background:
+                    linear-gradient(135deg, rgba(255, 255, 255, 0.88), rgba(245, 250, 255, 0.72)),
+                    radial-gradient(circle at top right, rgba(50, 107, 255, 0.14), transparent 34%);
             }
 
             .hero-kicker {
@@ -63,8 +72,8 @@ def inject_base_styles():
             }
 
             .hero-card h1 {
-                font-size: 2.1rem;
-                line-height: 1.08;
+                font-size: 2.25rem;
+                line-height: 1.04;
                 margin: 0;
                 color: var(--ink);
             }
@@ -77,7 +86,7 @@ def inject_base_styles():
             }
 
             .section-card {
-                padding: 1rem 1.1rem;
+                padding: 1rem 1.15rem;
                 margin: 0.85rem 0 1rem;
             }
 
@@ -94,10 +103,10 @@ def inject_base_styles():
 
             div[data-testid="stMetric"] {
                 background: var(--panel-strong);
-                border: 1px solid rgba(217, 207, 193, 0.85);
-                border-radius: 18px;
+                border: 1px solid var(--line);
+                border-radius: 20px;
                 padding: 0.9rem 1rem;
-                box-shadow: 0 12px 30px rgba(24, 36, 45, 0.05);
+                box-shadow: 0 16px 34px rgba(20, 42, 77, 0.07);
             }
 
             div[data-testid="stMetricLabel"] {
@@ -110,16 +119,22 @@ def inject_base_styles():
 
             .stButton > button {
                 border-radius: 999px;
-                border: 1px solid rgba(191, 91, 43, 0.35);
-                background: linear-gradient(180deg, #fffaf4 0%, #f5e5d7 100%);
+                border: 1px solid rgba(50, 107, 255, 0.22);
+                background: linear-gradient(180deg, #ffffff 0%, #eef4ff 100%);
                 color: var(--ink);
                 font-weight: 600;
                 padding: 0.55rem 1rem;
+                box-shadow: 0 10px 22px rgba(50, 107, 255, 0.08);
             }
 
             .stButton > button:hover {
-                border-color: rgba(191, 91, 43, 0.55);
+                border-color: rgba(50, 107, 255, 0.48);
                 color: var(--accent-deep);
+            }
+
+            .stButton > button[kind="primary"] {
+                background: linear-gradient(135deg, #3168ff 0%, #15a9d7 100%);
+                color: white;
             }
 
             .stDownloadButton > button {
@@ -128,16 +143,41 @@ def inject_base_styles():
 
             div[data-baseweb="select"] > div,
             div[data-baseweb="input"] > div,
-            .stTextArea textarea {
+            .stTextArea textarea,
+            div[data-baseweb="base-input"] > div {
                 border-radius: 14px !important;
-                border-color: rgba(217, 207, 193, 0.95) !important;
-                background: rgba(255, 253, 249, 0.95) !important;
+                border-color: rgba(133, 154, 191, 0.28) !important;
+                background: rgba(255, 255, 255, 0.9) !important;
             }
 
             div[data-testid="stDataFrame"] {
-                border: 1px solid rgba(217, 207, 193, 0.85);
+                border: 1px solid var(--line);
                 border-radius: 20px;
                 overflow: hidden;
+            }
+
+            div[data-baseweb="tab-list"] {
+                gap: 0.4rem;
+            }
+
+            button[data-baseweb="tab"] {
+                border-radius: 999px;
+                border: 1px solid transparent;
+                background: rgba(255, 255, 255, 0.52);
+                color: var(--muted);
+                padding: 0.45rem 0.95rem;
+            }
+
+            button[data-baseweb="tab"][aria-selected="true"] {
+                background: linear-gradient(135deg, rgba(49, 104, 255, 0.14), rgba(21, 169, 215, 0.14));
+                border-color: rgba(50, 107, 255, 0.2);
+                color: var(--accent-deep);
+            }
+
+            div[data-testid="stAlert"] {
+                border-radius: 18px;
+                border: 1px solid var(--line);
+                background: rgba(255, 255, 255, 0.82);
             }
 
             .summary-chip-row {
@@ -149,7 +189,7 @@ def inject_base_styles():
 
             .summary-chip {
                 background: var(--accent-soft);
-                border: 1px solid rgba(191, 91, 43, 0.18);
+                border: 1px solid rgba(50, 107, 255, 0.14);
                 border-radius: 999px;
                 color: var(--accent-deep);
                 font-size: 0.9rem;
@@ -160,6 +200,20 @@ def inject_base_styles():
             .muted-copy {
                 color: var(--muted);
                 font-size: 0.95rem;
+            }
+
+            .equation-card {
+                background: rgba(255, 255, 255, 0.7);
+                border: 1px solid var(--line);
+                border-radius: 22px;
+                padding: 1rem 1.15rem 0.35rem 1.15rem;
+                margin: 0.7rem 0;
+                box-shadow: 0 18px 36px rgba(20, 42, 77, 0.08);
+            }
+
+            .equation-card p {
+                color: var(--muted);
+                margin: 0 0 0.4rem 0;
             }
         </style>
         """,
@@ -246,13 +300,47 @@ def _load_dictionary(path):
 
 
 def _load_from_calibration(path):
+    project_dir = os.path.dirname(os.path.dirname(path))
     p = np.load(path, allow_pickle=True).item()
+    sector_names = list(p.get('s', []))
+    sector_codes = _load_sector_codes_from_data(project_dir, len(sector_names))
+
+    if len(sector_codes) != len(sector_names):
+        sector_codes = sector_names
+
     countries = pd.DataFrame({'code': p.get('c', []), 'name': p.get('c', [])})
-    sectors = pd.DataFrame({'code': p.get('s', []), 'name': p.get('s', [])})
+    sectors = pd.DataFrame({'code': sector_codes, 'name': sector_names})
     return countries, sectors, 'output/p.npy'
 
 
-def load_catalog(project_dir):
+def _load_sector_codes_from_data(project_dir, expected_count):
+    data_path = os.path.join(project_dir, 'data', '2020_SML.csv')
+    if not os.path.exists(data_path):
+        return []
+
+    columns = pd.read_csv(data_path, nrows=0).columns.tolist()[1:]
+    if not columns:
+        return []
+
+    first_country = columns[0].split('_', 1)[0]
+    sector_codes = []
+
+    for column in columns:
+        if '_' not in column:
+            continue
+        country_code, sector_code = column.split('_', 1)
+        if country_code != first_country:
+            break
+        sector_codes.append(sector_code)
+
+    if len(sector_codes) != expected_count:
+        return []
+
+    return sector_codes
+
+
+@lru_cache(maxsize=None)
+def _load_catalog_cached(project_dir):
     dictionary_path = os.path.join(project_dir, 'data', 'dictionary.csv')
     calibration_path = os.path.join(project_dir, 'output', 'p.npy')
 
@@ -274,8 +362,14 @@ def load_catalog(project_dir):
         for code, name in zip(sectors['code'], sectors['name'])
     ]
 
+    return countries, sectors, source
+
+
+def load_catalog(project_dir):
+    countries, sectors, source = _load_catalog_cached(project_dir)
+
     return {
-        'countries': countries,
-        'sectors': sectors,
+        'countries': countries.copy(),
+        'sectors': sectors.copy(),
         'source': source,
     }

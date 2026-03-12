@@ -5,7 +5,25 @@ def EX(w_hat, pi, p, d):
 
     Pi_mat = np.transpose(pi, (0, 2, 1))        # (N, J, N)
     Tau_mat = np.transpose(d['taup'], (0, 2, 1))  # (N, J, N)
-    G_mat = np.transpose(p['G'], (0, 2, 1))     # (J, J, N)
+    G_mat = p.get('_G_mat')
+    if G_mat is None:
+        G_mat = np.transpose(p['G'], (0, 2, 1))     # (J, J, N)
+        p['_G_mat'] = G_mat
+
+    eye_n = p.get('_eye_n')
+    if eye_n is None:
+        eye_n = np.eye(p['N'])
+        p['_eye_n'] = eye_n
+
+    eye_nj = p.get('_eye_nj')
+    if eye_nj is None:
+        eye_nj = np.eye(p['N'] * p['J'])
+        p['_eye_nj'] = eye_nj
+
+    alpha_weights = p.get('_alpha_weights')
+    if alpha_weights is None:
+        alpha_weights = p['alpha'].T.flatten(order='F')
+        p['_alpha_weights'] = alpha_weights
 
     M_mat = np.zeros((p['N'], p['J'], p['N'], p['J']))
 
@@ -25,7 +43,7 @@ def EX(w_hat, pi, p, d):
 
     # Rt_mat_pre: shape (p.N, p.N, p.J)
     Rt_mat_pre = np.sum(pi * (d['taup'] - 1) / d['taup'], axis=1)[:,
-                                                                  np.newaxis, :] * np.eye(p['N'])[:, :, np.newaxis]
+                                                                  np.newaxis, :] * eye_n[:, :, np.newaxis]
 
     # Concatenate Rt_mat across J horizontally
     Rt_mat = np.hstack([Rt_mat_pre[:, :, j]
@@ -36,13 +54,12 @@ def EX(w_hat, pi, p, d):
     Rt_mat = np.tile(Rt_mat, (p['J'], 1)) * p['alpha'].reshape(-1, 1)
 
     # Leontief matrix
-    Leonteiff = np.eye(p['N'] * p['J']) - M_mat - Rt_mat
+    Leonteiff = eye_nj - M_mat - Rt_mat
 
     # Pre-tax Income vector
     VAn = np.sum(d['VAnj'] * w_hat.T, axis=0)  # (N,)
     In_pre = VAn + p['D']                          # (N,)
-    In_vec = np.tile(In_pre, (p['J'], 1)).flatten() * \
-        p['alpha'].T.flatten(order='F')  # (J*N,)
+    In_vec = np.tile(In_pre, (p['J'], 1)).flatten() * alpha_weights  # (J*N,)
 
     # Solve for output
     X = np.linalg.solve(Leonteiff, In_vec)  # (J*N,)
