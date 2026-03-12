@@ -50,7 +50,8 @@ with overview_tab:
     st.markdown(
         "- Caliendo, L., Parro, F. (2015). Estimates of the Trade and Welfare Effects of NAFTA, *Review of Economic Studies*, 82(1), 1-44."
     )
-    st.markdown("- OECD. (2023). OECD Inter-Country Input-Output Tables, http://oe.cd/icio")
+    st.markdown(
+        "- OECD. (2023). OECD Inter-Country Input-Output Tables, http://oe.cd/icio")
 
 with data_tab:
     render_section_card(
@@ -90,7 +91,8 @@ with model_tab:
         """,
         unsafe_allow_html=True,
     )
-    st.latex(r"\hat{c}_n^j = \hat{w}_n^{\gamma_n^j}\prod_{k=1}^J(\hat{P}_n^k)^{\gamma_n^{k,j}}")
+    st.latex(
+        r"\hat{c}_n^j = \hat{w}_n^{\gamma_n^j}\prod_{k=1}^J(\hat{P}_n^k)^{\gamma_n^{k,j}}")
 
     st.markdown(
         """
@@ -100,7 +102,8 @@ with model_tab:
         """,
         unsafe_allow_html=True,
     )
-    st.latex(r"\hat{P}_n^j = \left[\sum_{i=1}^N \pi_{ni}^j \left(\hat{\tau}_{ni}^j \hat{c}_i^j\right)^{-\theta^j}\right]^{-1/\theta^j}")
+    st.latex(
+        r"\hat{P}_n^j = \left[\sum_{i=1}^N \pi_{ni}^j \left(\hat{\tau}_{ni}^j \hat{c}_i^j\right)^{-\theta^j}\right]^{-1/\theta^j}")
 
     st.markdown(
         """
@@ -110,12 +113,13 @@ with model_tab:
         """,
         unsafe_allow_html=True,
     )
-    st.latex(r"\hat{\pi}_{ni}^j = \left[\frac{\hat{\tau}_{ni}^j \hat{c}_i^j}{\hat{P}_n^j}\right]^{-\theta^j}")
+    st.latex(
+        r"\hat{\pi}_{ni}^j = \left[\frac{\hat{\tau}_{ni}^j \hat{c}_i^j}{\hat{P}_n^j}\right]^{-\theta^j}")
 
     st.markdown(
         """
         <div class="equation-card">
-            <p><strong>4. Expenditure recursion</strong></p>
+            <p><strong>4. Expenditures </strong></p>
         </div>
         """,
         unsafe_allow_html=True,
