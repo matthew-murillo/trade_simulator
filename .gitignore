@@ -2,3 +2,12 @@ data/
 *.mat
 todo.md
 .DS_Store
+__pycache__/
+*.py[cod]
+*.pyo
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.env
+.env.*
+.streamlit/secrets.toml
