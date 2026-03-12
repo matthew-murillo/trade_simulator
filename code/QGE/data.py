@@ -1,8 +1,42 @@
-import pandas as pd
-import numpy as np
-from scipy.sparse import eye, kron
-from scipy.linalg import null_space
+import csv
 import os
+
+import numpy as np
+import pandas as pd
+from scipy.linalg import null_space
+from scipy.sparse import eye, kron
+
+
+def _load_labels(DATA, OUTPUT, p):
+    dictionary_path = os.path.join(DATA, 'dictionary.csv')
+    if os.path.exists(dictionary_path):
+        dictionary = pd.read_csv(dictionary_path)
+        c = dictionary['country'].dropna().reset_index(drop=True)
+        s = dictionary['sector'].dropna().reset_index(drop=True)
+        return c, s
+
+    mrio_path = os.path.join(OUTPUT, 'data/MRIO.csv')
+    io_labels = []
+    with open(mrio_path, newline='') as handle:
+        reader = csv.reader(handle)
+        next(reader, None)
+        for _ in range(p['NJ']):
+            row = next(reader, None)
+            if row is None:
+                break
+            io_labels.append(row[0])
+
+    if len(io_labels) != p['NJ']:
+        raise FileNotFoundError(
+            'Unable to recover country and sector labels from data/dictionary.csv '
+            'or output/data/MRIO.csv.'
+        )
+
+    c = pd.Series([label.split('_', 1)[0]
+                   for label in io_labels[:p['N']]], name='country')
+    s = pd.Series([label.split('_', 1)[1]
+                   for label in io_labels[::p['N']]], name='sector')
+    return c, s
 
 
 def data(DATA, OUTPUT):
@@ -21,9 +55,7 @@ def data(DATA, OUTPUT):
     EXPENDITURES = p['J'] + p['FD']
 
     # Loading country and sector names
-    dictionary = pd.read_csv(os.path.join(DATA, 'dictionary.csv'))
-    c = dictionary['country'].dropna()
-    s = dictionary['sector'].dropna()
+    c, s = _load_labels(DATA, OUTPUT, p)
 
     # Load MRIO
     MRIO = np.genfromtxt(os.path.join(OUTPUT, 'data/MRIO.csv'),
@@ -66,8 +98,9 @@ def data(DATA, OUTPUT):
     # VAnj[j, n]: labor compensation from country m in sector j
 
     # Labor shares
-    B = VAnj / GO
-    B[np.isnan(B)] = 0
+    B = np.divide(VAnj, GO, out=np.zeros_like(VAnj), where=GO != 0)
+    # Negative labor shares in the source table are treated as zero.
+    B[B < 0] = 0
     # B[j, n]: share of gross output allocated to labor
 
     # Input-output shares
@@ -89,11 +122,12 @@ def data(DATA, OUTPUT):
     for j1 in range(p['J']):
         G[:, :, j1] = (1 - B[j1, :]) * gamma[:, :, j1]  # shape: (J, N)
 
-    # Domestic exports (sum over exporters)
+    # Sales implied by observed expenditure data
     xbilat_d = np.sum(xbilat, axis=0).reshape(
         (p['N'], p['J']), order='F').T  # shape: (J, N)
 
-    # Ensure GO reflects actual sales
+    # After dropping TLS from the supply side, sales can exceed IO+VA output.
+    # Lift GO to the sales-side measure so implied domestic sales stay non-negative.
     GO = np.maximum(GO, xbilat_d)  # (J, N)
     domsales = GO - xbilat_d      # (J, N)
 
@@ -111,6 +145,9 @@ def data(DATA, OUTPUT):
     # Expenditure by country: sum over exporters (axis 1)
     Expenditure = np.sum(xbilat, axis=1).reshape(
         (p['N'], p['J']), order='F').T  # (J, N)
+
+    # Recompute factor payments using the reconciled GO concept.
+    VAnj = B * GO
 
     # Trade deficits
     D = np.sum(Expenditure - GO, axis=0)  # (N,)
@@ -135,7 +172,7 @@ def data(DATA, OUTPUT):
     X = np.reshape(X, (p['N'], p['J']), order='F').T  # (J, N)
 
     # Aggregate factor payments
-    VAn = np.sum(GO * B, axis=0)  # (N,)
+    VAn = np.sum(VAnj, axis=0)  # (N,)
 
     # Tariff revenues
     Rt = xbilat_g * (tau - 1) / tau  # (N, N, J)
