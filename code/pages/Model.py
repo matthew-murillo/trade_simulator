@@ -1,218 +1,264 @@
-import uuid
-import streamlit as st
-import numpy as np
-import json
+import io
 import os
 import sys
-import time
-import io
+import uuid
 
-if os.path.abspath('..') not in sys.path:
-    sys.path.append(os.path.abspath('..'))
+import streamlit as st
+
+
+CURRENT = os.path.dirname(os.path.abspath(__file__))
+CODE_DIR = os.path.dirname(CURRENT)
+PROJECT = os.path.abspath(os.path.join(CURRENT, '..', '..'))
+
+if CODE_DIR not in sys.path:
+    sys.path.append(CODE_DIR)
+
 from QGE.main import run
-import pandas as pd
-import matplotlib.pyplot as plt
+from ui_utils import format_selection, inject_base_styles, load_catalog, render_page_header
 
-st.markdown("""
-    <style>
-        .block-container {
-            padding-top: 1rem;
-            padding-bottom: 4rem;  /* ✅ Increased bottom padding */
-            padding-left: 2rem;
-            padding-right: 2rem;
-        }
-        
-        .stText {
-            padding-bottom: 2rem; /* ✅ Extra spacing below log output */
-        }
-    </style>
-""", unsafe_allow_html=True)
 
-PROJECT = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
-OUTPUT = os.path.join(PROJECT, 'output')
-DATA = os.path.join(PROJECT, 'data')
+catalog = load_catalog(PROJECT)
+country_df = catalog['countries']
+sector_df = catalog['sectors']
 
-dictionary = pd.read_csv(os.path.join(DATA, 'dictionary.csv'))
-c = dictionary['country'].dropna()
-s = dictionary['sector'].dropna()
+country_options = country_df['code'].tolist()
+sector_options = sector_df['code'].tolist()
+country_labels = dict(zip(country_df['code'], country_df['label']))
+sector_labels = dict(zip(sector_df['code'], sector_df['label']))
 
-st.title("The Model")
 
-if "results" not in st.session_state:
-    st.session_state.results = None
-if "d" not in st.session_state:
-    st.session_state.d = None
-if "p" not in st.session_state:
-    st.session_state.p = None
+class StreamlitLogger(io.StringIO):
+    def __init__(self, container):
+        super().__init__()
+        self.container = container
+        self.messages = []
 
-# Initialize session state variables
-if "rules" not in st.session_state:
+    def write(self, message):
+        cleaned = message.strip()
+        if cleaned:
+            self.messages.append(cleaned)
+            self.container.code("\n".join(self.messages[-12:]), language="text")
+
+    def flush(self):
+        return None
+
+
+def _init_state():
+    st.session_state.setdefault('results', None)
+    st.session_state.setdefault('d', None)
+    st.session_state.setdefault('p', None)
+    st.session_state.setdefault('rules', [])
+    st.session_state.setdefault('model_ran', False)
+    st.session_state.setdefault('last_run_rule_count', 0)
+
+
+def _cleanup_rule_state(rule_id):
+    for key in ('importer', 'exporter', 'sectors', 'free_trade', 'tariff'):
+        st.session_state.pop(f'{key}_{rule_id}', None)
+
+
+def _build_policy_payload(rules):
+    payload = {}
+    for rule in rules:
+        payload[rule['id']] = [{
+            'importer_indices': [
+                country_options.index(code) for code in rule['importer']
+                if code in country_options
+            ],
+            'exporter_indices': [
+                country_options.index(code) for code in rule['exporter']
+                if code in country_options
+            ],
+            'sector_indices': [
+                sector_options.index(code) for code in rule['sectors']
+                if code in sector_options
+            ],
+            'free_trade': rule['free_trade'],
+            'tariff_change': rule['tariff_change'],
+        }]
+    return payload
+
+
+def _summary_table(rules):
+    rows = []
+    for idx, rule in enumerate(rules, start=1):
+        rows.append({
+            'Rule': f'Rule {idx}',
+            'Importers': format_selection(rule['importer']),
+            'Exporters': format_selection(rule['exporter']),
+            'Sectors': format_selection(rule['sectors']),
+            'Policy': 'Free trade reset' if rule['free_trade'] else f"{rule['tariff_change']:.1f}%",
+        })
+    return rows
+
+
+inject_base_styles()
+_init_state()
+
+render_page_header(
+    "Policy Builder",
+    "Create tariff or free-trade rules, review the scenario at a glance, and run the counterfactual when the package looks right.",
+    kicker="Scenario Design",
+)
+
+if catalog['source'] != 'dictionary.csv':
+    st.info(
+        f"Catalog labels are loading from `{catalog['source']}` because `data/dictionary.csv` is not available in this workspace."
+    )
+
+headline_cols = st.columns(4)
+headline_cols[0].metric("Policy rules", len(st.session_state.rules))
+headline_cols[1].metric("Countries available", len(country_options))
+headline_cols[2].metric("Sectors available", len(sector_options))
+headline_cols[3].metric(
+    "Results ready",
+    "Yes" if st.session_state.results is not None else "No",
+    delta=f"{st.session_state.last_run_rule_count} rules last run"
+    if st.session_state.model_ran else None,
+)
+
+action_cols = st.columns([1, 1, 2])
+if action_cols[0].button("Add policy rule", use_container_width=True):
+    st.session_state.rules.append({
+        'id': str(uuid.uuid4()),
+        'importer': [],
+        'exporter': [],
+        'sectors': [],
+        'free_trade': False,
+        'tariff_change': 0.0,
+    })
+
+if action_cols[1].button(
+    "Clear all",
+    use_container_width=True,
+    disabled=not st.session_state.rules,
+):
+    for rule in st.session_state.rules:
+        _cleanup_rule_state(rule['id'])
     st.session_state.rules = []
 
-if "update_counts" not in st.session_state:
-    st.session_state.update_counts = {}
+action_cols[2].markdown(
+    """
+    <div class="section-card">
+        <h4>Scope rule</h4>
+        <p>Leave an importer, exporter, or sector list blank to apply the rule to the full set in that dimension.</p>
+    </div>
+    """,
+    unsafe_allow_html=True,
+)
 
-if "summary_visible" not in st.session_state:
-    st.session_state.summary_visible = False  # Track whether to show summary
+updated_rules = []
 
-# Add rule button
-if st.button("➕ Add Tariff"):
-    new_rule_id = str(uuid.uuid4())
-    st.session_state.rules.append({
-        "id": new_rule_id,
-        "importer": [],
-        "exporter": [],
-        "sectors": [],
-        "free_trade": False,
-        "tariff_change": 0.0
-    })
-    st.session_state.update_counts[new_rule_id] = 0  # Initialize update count
+for idx, rule in enumerate(st.session_state.rules, start=1):
+    rule_id = rule['id']
 
-# Processing rules
-rules_to_keep = []
-update_happened = False
-
-for i, rule in enumerate(st.session_state.rules):
-    rule_id = rule["id"]
-
-    # Ensure session state variables exist
-    for key in ["importer", "exporter", "sectors"]:
-        state_key = f"{key}_{rule_id}"
-        if state_key not in st.session_state:
-            # Set once, avoid overwriting
-            st.session_state[state_key] = rule[key]
-
-    with st.form(f"form_{rule_id}"):
-        st.markdown(f"#### Tariff {i + 1}")
-
-        c1, c2, c3 = st.columns(3)
-
-        importer = c1.multiselect(
-            f"Importer {i}", c, key=f"importer_{rule_id}")
-
-        exporter = c2.multiselect(
-            f"Exporter {i}", c, key=f"exporter_{rule_id}")
-
-        sectors = c3.multiselect(
-            f"Sectors {i}", s, key=f"sectors_{rule_id}")
-
-        free_trade = st.checkbox("Free Trade", value=rule.get(
-            "free_trade", False), key=f"free_trade_{rule_id}")
-
-        tariff_change = None if free_trade else st.slider(
-            "Tariff Change (%)", -100.0, 100.0, rule.get("tariff_change", 0), step=1.0, key=f"tariff_{rule_id}")
-
-        delete = st.checkbox("🗑️ Delete this rule", key=f"delete_{rule_id}")
-
-        submitted = st.form_submit_button("Update Rule")
-
-        if submitted:
-            if rule_id not in st.session_state.update_counts:
-                st.session_state.update_counts[rule_id] = 0
-
-            if not delete:
-                rules_to_keep.append({
-                    "id": rule_id,
-                    "importer": st.session_state[f"importer_{rule_id}"],
-                    "exporter": st.session_state[f"exporter_{rule_id}"],
-                    "sectors": st.session_state[f"sectors_{rule_id}"],
-                    "free_trade": free_trade,
-                    "tariff_change": tariff_change
-                })
-            else:
-                st.session_state.pop(f"importer_{rule_id}", None)
-                st.session_state.pop(f"exporter_{rule_id}", None)
-                st.session_state.pop(f"sectors_{rule_id}", None)
-        else:
-            rules_to_keep.append(rule)
-
-# ✅ Update session state only once after processing all rules
-st.session_state.rules = rules_to_keep
-st.session_state.summary_visible = True  # Ensure summary remains visible
-# ✅ Success message with automatic disappearance
-if update_happened:
-    success_placeholder = st.empty()
-    success_placeholder.success("Rule updated successfully!")
-    time.sleep(1)
-    success_placeholder.empty()
-
-# ✅ Summary of Trade Policy (updates only on double-click and persists)
-if not st.session_state.rules:
-    st.info("No tariffs have been applied.")
-elif st.session_state.summary_visible:
-    st.markdown("### Summary of Counterfactual Tariffs")
-    for i, rule in enumerate(st.session_state.rules):
-        st.markdown(f"**Tariff {i + 1}:**")
-        st.write(
-            f"- **Importer(s):** {', '.join(rule['importer']) if rule['importer'] else 'All'}")
-        st.write(
-            f"- **Exporter(s):** {', '.join(rule['exporter']) if rule['exporter'] else 'All'}")
-        st.write(
-            f"- **Sectors:** {', '.join(rule['sectors']) if rule['sectors'] else 'All'}")
-        if rule["free_trade"]:
-            st.write("- **Policy:** Free Trade (No Tariffs)")
-        else:
-            st.write(f"- **Tariff Change:** {rule['tariff_change']}%")
-
-index_policy_dict = {}
-
-# Process rules into dictionary for model execution
-for rule in st.session_state.rules:
-    importer_indices = c[c.isin(rule["importer"])].index.tolist()
-    exporter_indices = c[c.isin(rule["exporter"])].index.tolist()
-    sector_indices = s[s.isin(rule["sectors"])].index.tolist()
-
-    rule_entry = {
-        "importer_indices": importer_indices,
-        "exporter_indices": exporter_indices,
-        "sector_indices": sector_indices,
-        "free_trade": rule["free_trade"],
-        "tariff_change": rule["tariff_change"]
+    defaults = {
+        f'importer_{rule_id}': rule.get('importer', []),
+        f'exporter_{rule_id}': rule.get('exporter', []),
+        f'sectors_{rule_id}': rule.get('sectors', []),
+        f'free_trade_{rule_id}': rule.get('free_trade', False),
+        f'tariff_{rule_id}': float(rule.get('tariff_change', 0.0) or 0.0),
     }
+    for state_key, default_value in defaults.items():
+        st.session_state.setdefault(state_key, default_value)
 
-    if rule["id"] in index_policy_dict:
-        index_policy_dict[rule["id"]].append(rule_entry)
-    else:
-        index_policy_dict[rule["id"]] = [rule_entry]
+    with st.expander(f"Rule {idx}", expanded=True):
+        info_col, remove_col = st.columns([5, 1])
+        info_col.caption("Blank selections mean the rule applies to all countries or sectors in that dimension.")
+        remove_rule = remove_col.button("Remove", key=f"remove_{rule_id}", use_container_width=True)
 
-st.markdown("---")
+        col1, col2, col3 = st.columns(3)
+        importer = col1.multiselect(
+            "Importing countries",
+            options=country_options,
+            format_func=lambda code: country_labels.get(code, code),
+            key=f'importer_{rule_id}',
+        )
+        exporter = col2.multiselect(
+            "Exporting countries",
+            options=country_options,
+            format_func=lambda code: country_labels.get(code, code),
+            key=f'exporter_{rule_id}',
+        )
+        sectors = col3.multiselect(
+            "Sectors",
+            options=sector_options,
+            format_func=lambda code: sector_labels.get(code, code),
+            key=f'sectors_{rule_id}',
+        )
 
-c4, c5 = st.columns(2)
+        lower_col, upper_col = st.columns([1, 2])
+        free_trade = lower_col.checkbox(
+            "Reset to free trade",
+            key=f'free_trade_{rule_id}',
+        )
+        if free_trade:
+            tariff_change = 0.0
+            upper_col.info("This rule replaces the selected tariff wedge with the frictionless benchmark.")
+        else:
+            tariff_change = upper_col.slider(
+                "Tariff change (%)",
+                min_value=-100.0,
+                max_value=100.0,
+                step=1.0,
+                key=f'tariff_{rule_id}',
+            )
 
-with c4:
-    if st.button("Run Model"):
-        class StreamlitLogger(io.StringIO):
-            """ Custom StringIO class to continuously overwrite the same line in Streamlit. """
+        if remove_rule:
+            _cleanup_rule_state(rule_id)
+            continue
 
-            def __init__(self, container):
-                super().__init__()
-                self.container = container
+        updated_rules.append({
+            'id': rule_id,
+            'importer': importer,
+            'exporter': exporter,
+            'sectors': sectors,
+            'free_trade': free_trade,
+            'tariff_change': tariff_change,
+        })
 
-            def write(self, message):
-                """ Override write method to replace the log text instead of appending. """
-                if message.strip():  # Ignore empty lines
-                    # Replace text instead of appending
-                    self.container.text(message.strip())
+st.session_state.rules = updated_rules
 
-            def flush(self):
-                pass  # No need to flush since updates happen live
+st.markdown("### Scenario summary")
+if st.session_state.rules:
+    summary_df = _summary_table(st.session_state.rules)
+    st.dataframe(summary_df, use_container_width=True, hide_index=True)
+else:
+    st.markdown(
+        """
+        <div class="section-card">
+            <h4>No custom policy rules yet</h4>
+            <p>Running now will simply return the calibrated baseline equilibrium. Add a rule when you want a counterfactual shock.</p>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
 
-        log_container = st.empty()  # ✅ This will hold a single dynamic output line
+policy_payload = _build_policy_payload(st.session_state.rules)
 
-        # Redirect stdout for dynamic logs
+st.markdown("### Run the model")
+run_col, nav_col = st.columns(2)
+log_container = st.empty()
+
+if run_col.button("Run scenario", type="primary", use_container_width=True):
+    original_stdout = sys.stdout
+    try:
         sys.stdout = StreamlitLogger(log_container)
-
-        # ✅ Run model and store results in session state
-        model_results = run(index_policy_dict)
-
+        with st.spinner("Solving the equilibrium..."):
+            model_results = run(policy_payload)
         if model_results:
             st.session_state.results, st.session_state.d, st.session_state.p = model_results
-            st.session_state.model_ran = True  # Mark model as run
-            st.success("Model run complete.")
+            st.session_state.model_ran = True
+            st.session_state.last_run_rule_count = len(st.session_state.rules)
+            st.success("Scenario solved. The results page is ready.")
+    except Exception as exc:
+        st.error(f"Model run failed: {exc}")
+    finally:
+        sys.stdout = original_stdout
 
-        sys.stdout = sys.__stdout__
-
-with c5:
-    # Navigation button to Results page
-    if st.button("Go to Results"):
-        st.switch_page("pages/Results.py")
+if nav_col.button(
+    "Open results",
+    use_container_width=True,
+    disabled=st.session_state.results is None,
+):
+    st.switch_page("pages/Results.py")

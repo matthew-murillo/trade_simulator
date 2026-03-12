@@ -19,6 +19,7 @@ else:
 
 def equilibrium(d, p):
     it = 0
+    maxit = int(p.get('maxit', 10_000))
     # Initialize model variables
     w_hat = d['w_hat0'].copy()     # (N, 1)
     P_hat = d['P_hat0'].copy()     # (J, N)
@@ -26,7 +27,7 @@ def equilibrium(d, p):
     pi = d['pi']                   # (N, N, J)
     D = p['D']                     # (N,)
     Z_err = 1
-    while Z_err > p['tol']:
+    while Z_err > p['tol'] and it < maxit:
 
         # Prices
         [P_hat, c_hat, Pn_hat] = EP(w_hat, P_hat, d, p)
@@ -44,6 +45,11 @@ def equilibrium(d, p):
         print('Tolerance = ', Z_err)
 
         it += 1
+
+    if Z_err > p['tol']:
+        raise RuntimeError(
+            f"Equilibrium did not converge within {maxit} iterations. Last tolerance: {Z_err}"
+        )
 
     print('Equilibrium converged')
 

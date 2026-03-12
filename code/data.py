@@ -10,8 +10,6 @@ data = pd.read_csv(os.path.join(DATA, "2020_SML.csv"), index_col=0)
 data = data.loc[~data.index.str.contains("OUT|TLS"), :]
 data = data.loc[:, ~data.columns.str.contains("OUT|TLS")]
 
-data.sum().sum()
-
 dictionary = pd.read_excel(os.path.join(DATA, "dictionary.xlsx"))
 
 country = dictionary['country'].dropna()

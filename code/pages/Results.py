@@ -1,364 +1,599 @@
-import streamlit as st
-import plotly.graph_objects as go
+import os
+import sys
+
 import numpy as np
 import pandas as pd
-from plots import plot_baseline_vs_ctf, plot_pct_change, plot_decomposition, plot_trade_map
+import streamlit as st
 
-st.markdown("""
-    <style>
-        .block-container {
-            padding-top: 1rem;
-            padding-bottom: 1rem;
-            padding-left: 2rem;
-            padding-right: 2rem;
-        }
-    </style>
-""", unsafe_allow_html=True)
 
-st.title("Results")
-# Create a dropdown at the top left
-st.sidebar.title("Select Results Category")
-result_category = st.sidebar.selectbox(
-    "Choose a category:",
-    ["Production", "Imports", "Exports", "Labor", "Welfare"]
+CURRENT = os.path.dirname(os.path.abspath(__file__))
+CODE_DIR = os.path.dirname(CURRENT)
+PROJECT = os.path.abspath(os.path.join(CURRENT, '..', '..'))
+
+if CODE_DIR not in sys.path:
+    sys.path.append(CODE_DIR)
+
+from plots import plot_baseline_vs_ctf, plot_decomposition, plot_pct_change, plot_trade_map
+from ui_utils import format_selection, inject_base_styles, load_catalog, pct_change, render_page_header, safe_divide
+
+
+def _round_frame(frame, digits=3):
+    rounded = frame.copy()
+    numeric_cols = rounded.select_dtypes(include=[np.number]).columns
+    rounded[numeric_cols] = rounded[numeric_cols].round(digits)
+    return rounded
+
+
+def _top_abs(frame, metric, n=15):
+    order = frame[metric].abs().sort_values(ascending=False).head(n).index
+    return frame.loc[order]
+
+
+def _sort_abs(frame, metric):
+    return frame.reindex(frame[metric].abs().sort_values(ascending=False).index)
+
+
+def _shorten_labels(values, max_chars=30):
+    labels = []
+    for value in values:
+        text = str(value)
+        if len(text) <= max_chars:
+            labels.append(text)
+        else:
+            labels.append(text[: max_chars - 1] + "...")
+    return labels
+
+
+def _download_table(frame, slug):
+    st.download_button(
+        "Download current table",
+        data=_round_frame(frame).to_csv(index=False).encode('utf-8'),
+        file_name=f"{slug}.csv",
+        mime='text/csv',
+        use_container_width=True,
+    )
+
+
+inject_base_styles()
+
+catalog = load_catalog(PROJECT)
+country_name_map = dict(zip(catalog['countries']['code'], catalog['countries']['name']))
+country_label_map = dict(zip(catalog['countries']['code'], catalog['countries']['label']))
+
+render_page_header(
+    "Results",
+    "Read the scenario from the top down: first the headline shifts, then the category-specific charts, then the detailed table for export or further work.",
+    kicker="Counterfactual Analysis",
 )
 
-# Display selected result
-st.title(f"{result_category}")
+results = st.session_state.get('results')
+baseline = st.session_state.get('d')
+p = st.session_state.get('p')
+rules = st.session_state.get('rules', [])
 
-# ✅ Use `.get()` to prevent crashes if results do not exist
-results = st.session_state.get("results", None)
-baseline = st.session_state.get("d", None)
-p = st.session_state.get("p", None)
-
-if results is None:
-    st.warning("No results found. Please run the model first.")
+if results is None or baseline is None or p is None:
+    st.warning("No stored results were found. Run a scenario on the model page first.")
+    if st.button("Go to model", use_container_width=True):
+        st.switch_page("pages/Model.py")
     st.stop()
-else:
-    results = st.session_state.results
-    baseline = st.session_state.d
-    p = st.session_state.p
 
-    # Placeholder for showing results dynamically (replace with actual data processing logic)
-    if result_category == "Production":
+countries = np.asarray(p['c'])
+sectors = np.asarray(p['s'])
+country_lookup = {code: country_label_map.get(code, code) for code in countries}
+country_names = [country_name_map.get(code, code) for code in countries]
 
-        # Create a dropdown for selecting either "All Countries" or a specific country
-        selection_options = ["All Countries"] + list(p['c'])
-        selected_option = st.selectbox("Choose a view:", selection_options)
+if rules:
+    with st.expander("Scenario summary", expanded=False):
+        summary_rows = []
+        for idx, rule in enumerate(rules, start=1):
+            summary_rows.append({
+                'Rule': f'Rule {idx}',
+                'Importers': format_selection(rule['importer']),
+                'Exporters': format_selection(rule['exporter']),
+                'Sectors': format_selection(rule['sectors']),
+                'Policy': 'Free trade reset' if rule['free_trade'] else f"{rule['tariff_change']:.1f}%",
+            })
+        st.dataframe(summary_rows, use_container_width=True, hide_index=True)
 
-        if selected_option == "All Countries":
-            # Display results for all countries
-            st.write("Displaying results for all countries...")
-            # Production visualization
-            ctf_go = np.sum(results['GO'], axis=0)
-            baseline_go = np.sum(baseline['GO'], axis=0)
-            go_hat = ctf_go / baseline_go
-            q_hat = (go_hat / results['Pn_hat'])
-            go_pct_change = np.round(((go_hat)-1)*100, 4)
-            pn_pct_change = np.round(((results['Pn_hat'])-1)*100, 4)
-            q_pct_change = np.round(((q_hat)-1)*100, 4)
 
-            fig = plot_baseline_vs_ctf(
-                p['c'], baseline_go, ctf_go,
-                var_name="Gross Output", xaxis_label="Countries", yaxis_label="Gross Output (USD Million)",
-                baseline_label="Baseline", ctf_label="Counterfactual",
-                baseline_color="blue", ctf_color="red"
+baseline_output = np.sum(baseline['GO'], axis=0)
+counterfactual_output = np.sum(results['GO'], axis=0)
+output_hat = safe_divide(counterfactual_output, baseline_output)
+price_hat = np.asarray(results['Pn_hat'], dtype=float)
+real_output_hat = safe_divide(output_hat, price_hat)
+income_hat = safe_divide(results['In'], baseline['In'])
+welfare_hat = safe_divide(income_hat, price_hat)
+value_added_hat = safe_divide(np.sum(results['VAnj'], axis=0), np.sum(baseline['VAnj'], axis=0))
+employment_hat = safe_divide(value_added_hat, results['w_hat'])
+
+country_summary = pd.DataFrame({
+    'Country': countries,
+    'Name': country_names,
+    'Nominal output %': np.nan_to_num((output_hat - 1.0) * 100.0),
+    'Price %': np.nan_to_num((price_hat - 1.0) * 100.0),
+    'Real output %': np.nan_to_num((real_output_hat - 1.0) * 100.0),
+    'Imports %': pct_change(np.sum(results['Im'], axis=0), np.sum(baseline['Im'], axis=0)),
+    'Exports %': pct_change(np.sum(results['Ex'], axis=0), np.sum(baseline['Ex'], axis=0)),
+    'Wage %': np.nan_to_num((np.asarray(results['w_hat'], dtype=float) - 1.0) * 100.0),
+    'Employment %': np.nan_to_num((employment_hat - 1.0) * 100.0),
+    'Income %': np.nan_to_num((income_hat - 1.0) * 100.0),
+    'Welfare %': np.nan_to_num((welfare_hat - 1.0) * 100.0),
+    'Baseline output': baseline_output,
+    'Counterfactual output': counterfactual_output,
+    'Baseline income': baseline['In'],
+    'Counterfactual income': results['In'],
+})
+
+best_welfare = country_summary.loc[country_summary['Welfare %'].idxmax()]
+worst_welfare = country_summary.loc[country_summary['Welfare %'].idxmin()]
+largest_output = country_summary.loc[country_summary['Real output %'].abs().idxmax()]
+avg_welfare = country_summary['Welfare %'].mean()
+
+metric_cols = st.columns(4)
+metric_cols[0].metric("Average welfare", f"{avg_welfare:+.2f}%")
+metric_cols[1].metric(
+    "Best welfare outcome",
+    best_welfare['Country'],
+    delta=f"{best_welfare['Welfare %']:+.2f}%",
+)
+metric_cols[2].metric(
+    "Weakest welfare outcome",
+    worst_welfare['Country'],
+    delta=f"{worst_welfare['Welfare %']:+.2f}%",
+)
+metric_cols[3].metric(
+    "Largest real-output move",
+    largest_output['Country'],
+    delta=f"{largest_output['Real output %']:+.2f}%",
+)
+
+category = st.radio(
+    "Focus",
+    ["Production", "Imports", "Exports", "Labor", "Welfare"],
+    horizontal=True,
+)
+
+active_table = None
+
+if category == "Production":
+    scope = st.radio(
+        "View",
+        ["All countries", "Country detail"],
+        horizontal=True,
+        key='production_scope',
+    )
+
+    if scope == "All countries":
+        top_real = _top_abs(country_summary, 'Real output %', n=18)
+        comparison = country_summary.sort_values('Baseline output', ascending=False).head(15)
+
+        col1, col2 = st.columns(2)
+        with col1:
+            st.plotly_chart(
+                plot_pct_change(
+                    top_real['Country'],
+                    top_real['Real output %'],
+                    var_name="Real output",
+                    xaxis_label="Countries",
+                    yaxis_label="% change",
+                ),
+                use_container_width=True,
+            )
+        with col2:
+            st.plotly_chart(
+                plot_pct_change(
+                    top_real['Country'],
+                    top_real['Price %'],
+                    var_name="Price level",
+                    xaxis_label="Countries",
+                    yaxis_label="% change",
+                ),
+                use_container_width=True,
             )
 
-            st.plotly_chart(fig, use_container_width=True)
-
-            fig = plot_pct_change(
-                p['c'], q_pct_change,
-                var_name="Output % Change", xaxis_label="Countries", yaxis_label="Output % Change",
-                pct_change_label="% Change")
-
-            st.plotly_chart(fig, use_container_width=True)
-
-            fig = plot_pct_change(
-                p['c'], pn_pct_change,
-                var_name="Prices", xaxis_label="Countries", yaxis_label="Prices % Change",
-                pct_change_label="% Change")
-
-            st.plotly_chart(fig, use_container_width=True)
-
-            fig = plot_decomposition(
-                p['c'], q_pct_change, pn_pct_change, go_pct_change,
-                var_name="Gross Output", component_a_name="Quantity", component_b_name="Price",
-                xaxis_label="Countries", yaxis_label="Decomposition (% Change from Baseline)")
-            st.plotly_chart(fig, use_container_width=True)
-
-        else:
-            # Display results for a specific country
-            st.write(f"Displaying results for {selected_option}...")
-            # Production visualization
-            ctf_go = results['GO'][:, p['c'] == selected_option].flatten()
-            baseline_go = baseline['GO'][:, p['c']
-                                         == selected_option].flatten()
-            go_hat = results['GO']/baseline['GO']
-            q_hat = go_hat / results['P_hat']
-            go_pct_change = np.round(((go_hat)-1)*100, 4)
-            pn_pct_change = np.round(((results['P_hat'])-1)*100, 4)
-            q_pct_change = np.round(((q_hat)-1)*100, 4)
-
-            # Country specific
-            go_pct_change = go_pct_change[:,
-                                          p['c'] == selected_option].flatten()
-            pn_pct_change = pn_pct_change[:,
-                                          p['c'] == selected_option].flatten()
-            q_pct_change = q_pct_change[:, p['c'] == selected_option].flatten()
-
-            fig = plot_baseline_vs_ctf(
-                np.arange(len(p['s'])), baseline_go, ctf_go,
-                var_name="Gross Output", xaxis_label="Sectors", yaxis_label="Gross Output (USD Million)",
-                baseline_label="Baseline", ctf_label="Counterfactual",
-                baseline_color="blue", ctf_color="red"
-            )
-
-            st.plotly_chart(fig, use_container_width=True)
-
-            fig = plot_pct_change(
-                np.arange(len(p['s'])), q_pct_change,
-                var_name="Output", xaxis_label="Sectors", yaxis_label="Output % Change",
-                pct_change_label="% Change")
-
-            st.plotly_chart(fig, use_container_width=True)
-
-            fig = plot_pct_change(
-                np.arange(len(p['s'])), pn_pct_change,
-                var_name="Prices", xaxis_label="Sectors", yaxis_label="Prices % Change",
-                pct_change_label="% Change")
-
-            st.plotly_chart(fig, use_container_width=True)
-
-            fig = plot_decomposition(
-                np.arange(
-                    len(p['s'])), q_pct_change, pn_pct_change, go_pct_change,
-                var_name="Gross Output", component_a_name="Quantity", component_b_name="Price",
-                xaxis_label="Sectors", yaxis_label="Decomposition")
-            st.plotly_chart(fig, use_container_width=True)
-
-    elif result_category == "Imports":
-
-        # Create a dropdown for selecting either "All Countries" or a specific country
-        selection_options = ["All Countries"] + list(p['c'])
-        selected_option = st.selectbox("Choose a view:", selection_options)
-
-        if selected_option == "All Countries":
-            st.write("Displaying results for all countries...")
-            # Imports visualization
-            ctf_m = np.sum(results['Im'], axis=0)
-            baseline_m = np.sum(baseline['Im'], axis=0)
-            m_hat = ctf_m / baseline_m
-            m_pct_change = np.round(((m_hat)-1)*100, 4)
-
-            fig = plot_pct_change(
-                p['c'], m_pct_change,
-                var_name="Imports % Change", xaxis_label="Countries", yaxis_label="Imports % Change",
-                pct_change_label="% Change")
-
-            st.plotly_chart(fig, use_container_width=True)
-
-        else:
-            st.write(f"Displaying results for {selected_option}...")
-            # Imports visualization
-            ctf_m = results['Im'][:, p['c'] == selected_option].flatten()
-            baseline_m = baseline['Im'][:, p['c'] == selected_option].flatten()
-            m_hat = ctf_m / baseline_m
-            m_pct_change = np.round(((m_hat)-1)*100, 4)
-            ctf_xbilat = results['xbilat']
-            baseline_xbilat = baseline['xbilat']
-
-            fig = plot_pct_change(
-                np.arange(len(p['s'])), m_pct_change,
-                var_name=f"Imports by Sector for {selected_option}", xaxis_label="Sectors", yaxis_label="Imports % Change",
-                pct_change_label="% Change")
-
-            st.plotly_chart(fig, use_container_width=True)
-
-            # ✅ Layout: dropdown in the left column, map in the right
-            selected_sector = st.selectbox(
-                "Sector", ["All"] + list(p['s']))
-
-            if selected_sector == "All":
-                sector_filter = None
-                # Aggregate trade flows
-                xbilat_agg_hat = np.sum(ctf_xbilat, axis=2) / \
-                    np.sum(baseline_xbilat, axis=2)
-                xbilat_agg_pct_change = np.round(
-                    ((xbilat_agg_hat)-1)*100, 4)
-                np.fill_diagonal(xbilat_agg_pct_change, 0)
-                # replace nan with 0
-                xbilat_agg_pct_change = np.nan_to_num(xbilat_agg_pct_change)
-
-                # Country specific
-                df = pd.DataFrame()
-                df['country'] = p['c']
-                df['sector'] = "All"
-                df['trade_flow'] = xbilat_agg_pct_change[p['c']
-                                                         == selected_option, :].flatten()
-                fig = plot_trade_map(
-                    df, selected_option, flow="Imports", sector=sector_filter)
-                st.plotly_chart(fig, use_container_width=True)
-            else:
-                sector_filter = np.where(p['s'] == selected_sector)[0][0]
-                # Aggregate trade flows
-                xbilat_hat = ctf_xbilat / baseline_xbilat
-                xbilat_pct_change = np.round(((xbilat_hat)-1)*100, 4)
-                for j in range(p['J']):
-                    np.fill_diagonal(xbilat_pct_change[:, :, j], 0)
-                # replace nan with 0
-                xbilat_pct_change = np.nan_to_num(xbilat_pct_change)
-                # Country specific
-                df = pd.DataFrame()
-                df['country'] = p['c']
-                df['sector'] = selected_sector
-                df['trade_flow'] = xbilat_pct_change[p['c'] == selected_option,
-                                                     :, p['s'] == selected_sector].flatten()
-
-                fig = plot_trade_map(
-                    df, selected_option, flow="Imports", sector=sector_filter)
-                st.plotly_chart(fig, use_container_width=True)
-
-    elif result_category == "Exports":
-
-        # Create a dropdown for selecting either "All Countries" or a specific country
-        selection_options = ["All Countries"] + list(p['c'])
-        selected_option = st.selectbox("Choose a view:", selection_options)
-
-        if selected_option == "All Countries":
-            st.write("Displaying results for all countries...")
-            # Imports visualization
-            ctf_m = np.sum(results['Ex'], axis=0)
-            baseline_m = np.sum(baseline['Ex'], axis=0)
-            m_hat = ctf_m / baseline_m
-            m_pct_change = np.round(((m_hat)-1)*100, 4)
-
-            fig = plot_pct_change(
-                p['c'], m_pct_change,
-                var_name="Exports % Change", xaxis_label="Countries", yaxis_label="Exports % Change",
-                pct_change_label="% Change")
-
-            st.plotly_chart(fig, use_container_width=True)
-
-        else:
-            st.write(f"Displaying results for {selected_option}...")
-            # Imports visualization
-            ctf_m = results['Ex'][:, p['c'] == selected_option].flatten()
-            baseline_m = baseline['Ex'][:, p['c'] == selected_option].flatten()
-            m_hat = ctf_m / baseline_m
-            m_pct_change = np.round(((m_hat)-1)*100, 4)
-            ctf_xbilat = results['xbilat']
-            baseline_xbilat = baseline['xbilat']
-
-            fig = plot_pct_change(
-                np.arange(len(p['s'])), m_pct_change,
-                var_name=f"Exports by Sector for {selected_option}", xaxis_label="Sectors", yaxis_label="Exports % Change",
-                pct_change_label="% Change")
-
-            st.plotly_chart(fig, use_container_width=True)
-
-            # ✅ Layout: dropdown in the left column, map in the right
-            selected_sector = st.selectbox(
-                "Sector", ["All"] + list(p['s']))
-
-            if selected_sector == "All":
-                sector_filter = None
-                # Aggregate trade flows
-                xbilat_agg_hat = np.sum(ctf_xbilat, axis=2) / \
-                    np.sum(baseline_xbilat, axis=2)
-                xbilat_agg_pct_change = np.round(
-                    ((xbilat_agg_hat)-1)*100, 4)
-                np.fill_diagonal(xbilat_agg_pct_change, 0)
-                # replace nan with 0
-                xbilat_agg_pct_change = np.nan_to_num(xbilat_agg_pct_change)
-
-                # Country specific
-                df = pd.DataFrame()
-                df['country'] = p['c']
-                df['sector'] = "All"
-                df['trade_flow'] = xbilat_agg_pct_change[:,
-                                                         p['c'] == selected_option].flatten()
-                fig = plot_trade_map(
-                    df, selected_option, flow="Exports", sector=sector_filter)
-                st.plotly_chart(fig, use_container_width=True)
-            else:
-                sector_filter = np.where(p['s'] == selected_sector)[0][0]
-                # Aggregate trade flows
-                xbilat_hat = ctf_xbilat / baseline_xbilat
-                xbilat_pct_change = np.round(((xbilat_hat)-1)*100, 4)
-                for j in range(p['J']):
-                    np.fill_diagonal(xbilat_pct_change[:, :, j], 0)
-                # replace nan with 0
-                xbilat_pct_change = np.nan_to_num(xbilat_pct_change)
-                # Country specific
-                df = pd.DataFrame()
-                df['country'] = p['c']
-                df['sector'] = selected_sector
-                df['trade_flow'] = xbilat_pct_change[:,
-                                                     p['c'] == selected_option, p['s'] == selected_sector].flatten()
-
-                fig = plot_trade_map(
-                    df, selected_option, flow="Exports", sector=sector_filter)
-                st.plotly_chart(fig, use_container_width=True)
-
-    elif result_category == "Labor":
-
-        # Create a dropdown for selecting either "All Countries" or a specific country
-        selection_options = ["All Countries"] + list(p['c'])
-        selected_option = st.selectbox("Choose a view:", selection_options)
-        if selected_option == "All Countries":
-            st.write("Displaying results for all countries...")
-            # Labor visualization
-            VA_hat = np.sum(results['VAnj'], axis=0) / \
-                np.sum(baseline['VAnj'], axis=0)
-            w_pct_change = np.round(((results['w_hat'])-1)*100, 4)
-
-            fig = plot_pct_change(
-                p['c'], w_pct_change,
-                var_name="Wages % Change", xaxis_label="Countries", yaxis_label="Wages % Change",
-                pct_change_label="% Change")
-            st.plotly_chart(fig, use_container_width=True)
-        else:
-            st.write(f"Displaying results for {selected_option}...")
-            # Labor visualization
-            VAnj_hat = results['VAnj']/baseline['VAnj']
-            Lnj_hat = VAnj_hat/results['w_hat']
-            Lnj_pct_change = np.round(((Lnj_hat)-1)*100, 4)
-            np.nan_to_num(Lnj_pct_change)
-
-            fig = plot_pct_change(
-                np.arange(len(p['s'])), Lnj_pct_change[:,
-                                                       p['c'] == selected_option].flatten(),
-                var_name="Employment", xaxis_label="Sectors", yaxis_label="Employment % Change",
-                pct_change_label="% Change")
-            st.plotly_chart(fig, use_container_width=True)
-    elif result_category == "Welfare":
-
-        st.write("Displaying results for all countries...")
-        income_hat = results['In'] / baseline['In']
-        income_pct_change = np.round(((income_hat)-1)*100, 4)
-        pn_pct_change = np.round(((results['Pn_hat'])-1)*100, 4)
-        welfare_hat = income_hat/results['Pn_hat']
-        welfare_pct_change = np.round(((welfare_hat)-1)*100, 4)
-
-        # Comparing income between counterfactual and baseline for all countries
-        fig = plot_baseline_vs_ctf(
-            p['c'], results['In'], baseline['In'],
-            var_name="Income", xaxis_label="Countries", yaxis_label="Income (USD Million)",
-            baseline_label="Baseline", ctf_label="Counterfactual",
-            baseline_color="blue", ctf_color="red"
+        st.plotly_chart(
+            plot_baseline_vs_ctf(
+                comparison['Country'],
+                comparison['Baseline output'],
+                comparison['Counterfactual output'],
+                var_name="Gross output",
+                xaxis_label="Countries",
+                yaxis_label="Output",
+            ),
+            use_container_width=True,
         )
 
-        st.plotly_chart(fig, use_container_width=True)
-        # Percent change in welfare
-        fig = plot_pct_change(
-            p['c'], welfare_pct_change,
-            var_name="Welfare % Change", xaxis_label="Countries", yaxis_label="Welfare % Change",
-            pct_change_label="% Change")
-        st.plotly_chart(fig, use_container_width=True)
-        # Welfare decomposition
-        fig = plot_decomposition(
-            p['c'], income_pct_change, -pn_pct_change, welfare_pct_change,
-            var_name="Welfare", component_a_name="Income", component_b_name="Prices",
-            xaxis_label="Countries", yaxis_label="Decomposition (% Change from Baseline)")
-        st.plotly_chart(fig, use_container_width=True)
+        active_table = _sort_abs(
+            country_summary[[
+                'Country',
+                'Name',
+                'Nominal output %',
+                'Price %',
+                'Real output %',
+                'Baseline output',
+                'Counterfactual output',
+            ]],
+            'Real output %',
+        )
+    else:
+        selected_country = st.selectbox(
+            "Country",
+            options=countries,
+            format_func=lambda code: country_lookup.get(code, code),
+            key='production_country',
+        )
+        country_idx = int(np.where(countries == selected_country)[0][0])
+        sector_frame = pd.DataFrame({
+            'Sector': sectors,
+            'Baseline output': baseline['GO'][:, country_idx],
+            'Counterfactual output': results['GO'][:, country_idx],
+        })
+        sector_nominal_hat = safe_divide(
+            sector_frame['Counterfactual output'].to_numpy(),
+            sector_frame['Baseline output'].to_numpy(),
+        )
+        sector_price_hat = np.asarray(results['P_hat'][:, country_idx], dtype=float)
+        sector_real_hat = safe_divide(sector_nominal_hat, sector_price_hat)
+        sector_frame['Nominal output %'] = np.nan_to_num((sector_nominal_hat - 1.0) * 100.0)
+        sector_frame['Price %'] = np.nan_to_num((sector_price_hat - 1.0) * 100.0)
+        sector_frame['Real output %'] = np.nan_to_num((sector_real_hat - 1.0) * 100.0)
+
+        top_sectors = _top_abs(sector_frame, 'Real output %', n=12)
+        sector_labels = _shorten_labels(top_sectors['Sector'])
+
+        col1, col2 = st.columns(2)
+        with col1:
+            st.plotly_chart(
+                plot_baseline_vs_ctf(
+                    sector_labels,
+                    top_sectors['Baseline output'],
+                    top_sectors['Counterfactual output'],
+                    var_name=f"Gross output for {selected_country}",
+                    xaxis_label="Sectors",
+                    yaxis_label="Output",
+                ),
+                use_container_width=True,
+            )
+        with col2:
+            st.plotly_chart(
+                plot_decomposition(
+                    sector_labels,
+                    top_sectors['Real output %'],
+                    top_sectors['Price %'],
+                    top_sectors['Nominal output %'],
+                    var_name=f"Output drivers for {selected_country}",
+                    component_a_name="Real output",
+                    component_b_name="Prices",
+                    xaxis_label="Sectors",
+                    yaxis_label="% change",
+                ),
+                use_container_width=True,
+            )
+
+        active_table = _sort_abs(
+            sector_frame[['Sector', 'Baseline output', 'Counterfactual output', 'Nominal output %', 'Price %', 'Real output %']],
+            'Real output %',
+        )
+
+elif category == "Imports":
+    scope = st.radio(
+        "View",
+        ["All countries", "Country detail"],
+        horizontal=True,
+        key='imports_scope',
+    )
+
+    imports_frame = country_summary[['Country', 'Name', 'Imports %']].copy()
+
+    if scope == "All countries":
+        movers = _top_abs(imports_frame, 'Imports %', n=18)
+        st.plotly_chart(
+            plot_pct_change(
+                movers['Country'],
+                movers['Imports %'],
+                var_name="Imports",
+                xaxis_label="Countries",
+                yaxis_label="% change",
+            ),
+            use_container_width=True,
+        )
+        active_table = _sort_abs(imports_frame, 'Imports %')
+    else:
+        selected_country = st.selectbox(
+            "Country",
+            options=countries,
+            format_func=lambda code: country_lookup.get(code, code),
+            key='imports_country',
+        )
+        country_idx = int(np.where(countries == selected_country)[0][0])
+        sector_frame = pd.DataFrame({
+            'Sector': sectors,
+            'Imports %': pct_change(results['Im'][:, country_idx], baseline['Im'][:, country_idx]),
+            'Baseline imports': baseline['Im'][:, country_idx],
+            'Counterfactual imports': results['Im'][:, country_idx],
+        })
+        top_sectors = _top_abs(sector_frame, 'Imports %', n=12)
+
+        st.plotly_chart(
+            plot_pct_change(
+                _shorten_labels(top_sectors['Sector']),
+                top_sectors['Imports %'],
+                var_name=f"Imports for {selected_country}",
+                xaxis_label="Sectors",
+                yaxis_label="% change",
+            ),
+            use_container_width=True,
+        )
+
+        sector_choice = st.selectbox(
+            "Partner map sector",
+            options=["All sectors"] + list(sectors),
+            key='imports_partner_sector',
+        )
+        if sector_choice == "All sectors":
+            partner_pct = pct_change(np.sum(results['xbilat'], axis=2), np.sum(baseline['xbilat'], axis=2))
+            sector_label = None
+        else:
+            sector_idx = int(np.where(sectors == sector_choice)[0][0])
+            partner_pct = pct_change(results['xbilat'][:, :, sector_idx], baseline['xbilat'][:, :, sector_idx])
+            sector_label = sector_choice
+        np.fill_diagonal(partner_pct, 0.0)
+
+        partner_frame = pd.DataFrame({
+            'Country': countries,
+            'Name': country_names,
+            'Imports %': partner_pct[country_idx, :],
+        })
+        partner_frame = partner_frame[partner_frame['Country'] != selected_country]
+        partner_frame = _sort_abs(partner_frame, 'Imports %')
+
+        map_df = pd.DataFrame({
+            'country': partner_frame['Country'],
+            'sector': sector_choice,
+            'trade_flow': partner_frame['Imports %'],
+        })
+        st.plotly_chart(
+            plot_trade_map(map_df, selected_country, flow="Imports", sector=sector_label),
+            use_container_width=True,
+        )
+
+        active_table = _sort_abs(
+            sector_frame[['Sector', 'Baseline imports', 'Counterfactual imports', 'Imports %']],
+            'Imports %',
+        )
+        st.markdown("#### Partner detail")
+        st.dataframe(_round_frame(partner_frame), use_container_width=True, hide_index=True)
+
+elif category == "Exports":
+    scope = st.radio(
+        "View",
+        ["All countries", "Country detail"],
+        horizontal=True,
+        key='exports_scope',
+    )
+
+    exports_frame = country_summary[['Country', 'Name', 'Exports %']].copy()
+
+    if scope == "All countries":
+        movers = _top_abs(exports_frame, 'Exports %', n=18)
+        st.plotly_chart(
+            plot_pct_change(
+                movers['Country'],
+                movers['Exports %'],
+                var_name="Exports",
+                xaxis_label="Countries",
+                yaxis_label="% change",
+            ),
+            use_container_width=True,
+        )
+        active_table = _sort_abs(exports_frame, 'Exports %')
+    else:
+        selected_country = st.selectbox(
+            "Country",
+            options=countries,
+            format_func=lambda code: country_lookup.get(code, code),
+            key='exports_country',
+        )
+        country_idx = int(np.where(countries == selected_country)[0][0])
+        sector_frame = pd.DataFrame({
+            'Sector': sectors,
+            'Exports %': pct_change(results['Ex'][:, country_idx], baseline['Ex'][:, country_idx]),
+            'Baseline exports': baseline['Ex'][:, country_idx],
+            'Counterfactual exports': results['Ex'][:, country_idx],
+        })
+        top_sectors = _top_abs(sector_frame, 'Exports %', n=12)
+
+        st.plotly_chart(
+            plot_pct_change(
+                _shorten_labels(top_sectors['Sector']),
+                top_sectors['Exports %'],
+                var_name=f"Exports for {selected_country}",
+                xaxis_label="Sectors",
+                yaxis_label="% change",
+            ),
+            use_container_width=True,
+        )
+
+        sector_choice = st.selectbox(
+            "Partner map sector",
+            options=["All sectors"] + list(sectors),
+            key='exports_partner_sector',
+        )
+        if sector_choice == "All sectors":
+            partner_pct = pct_change(np.sum(results['xbilat'], axis=2), np.sum(baseline['xbilat'], axis=2))
+            sector_label = None
+        else:
+            sector_idx = int(np.where(sectors == sector_choice)[0][0])
+            partner_pct = pct_change(results['xbilat'][:, :, sector_idx], baseline['xbilat'][:, :, sector_idx])
+            sector_label = sector_choice
+        np.fill_diagonal(partner_pct, 0.0)
+
+        partner_frame = pd.DataFrame({
+            'Country': countries,
+            'Name': country_names,
+            'Exports %': partner_pct[:, country_idx],
+        })
+        partner_frame = partner_frame[partner_frame['Country'] != selected_country]
+        partner_frame = _sort_abs(partner_frame, 'Exports %')
+
+        map_df = pd.DataFrame({
+            'country': partner_frame['Country'],
+            'sector': sector_choice,
+            'trade_flow': partner_frame['Exports %'],
+        })
+        st.plotly_chart(
+            plot_trade_map(map_df, selected_country, flow="Exports", sector=sector_label),
+            use_container_width=True,
+        )
+
+        active_table = _sort_abs(
+            sector_frame[['Sector', 'Baseline exports', 'Counterfactual exports', 'Exports %']],
+            'Exports %',
+        )
+        st.markdown("#### Partner detail")
+        st.dataframe(_round_frame(partner_frame), use_container_width=True, hide_index=True)
+
+elif category == "Labor":
+    scope = st.radio(
+        "View",
+        ["All countries", "Country detail"],
+        horizontal=True,
+        key='labor_scope',
+    )
+
+    labor_frame = country_summary[['Country', 'Name', 'Wage %', 'Employment %']].copy()
+
+    if scope == "All countries":
+        movers = _top_abs(labor_frame, 'Employment %', n=18)
+        col1, col2 = st.columns(2)
+        with col1:
+            st.plotly_chart(
+                plot_pct_change(
+                    movers['Country'],
+                    movers['Wage %'],
+                    var_name="Wages",
+                    xaxis_label="Countries",
+                    yaxis_label="% change",
+                ),
+                use_container_width=True,
+            )
+        with col2:
+            st.plotly_chart(
+                plot_pct_change(
+                    movers['Country'],
+                    movers['Employment %'],
+                    var_name="Employment",
+                    xaxis_label="Countries",
+                    yaxis_label="% change",
+                ),
+                use_container_width=True,
+            )
+        active_table = _sort_abs(labor_frame, 'Employment %')
+    else:
+        selected_country = st.selectbox(
+            "Country",
+            options=countries,
+            format_func=lambda code: country_lookup.get(code, code),
+            key='labor_country',
+        )
+        country_idx = int(np.where(countries == selected_country)[0][0])
+        sector_value_added_hat = safe_divide(results['VAnj'][:, country_idx], baseline['VAnj'][:, country_idx])
+        sector_employment_hat = safe_divide(sector_value_added_hat, results['w_hat'][country_idx])
+        sector_frame = pd.DataFrame({
+            'Sector': sectors,
+            'Value added %': np.nan_to_num((sector_value_added_hat - 1.0) * 100.0),
+            'Employment %': np.nan_to_num((sector_employment_hat - 1.0) * 100.0),
+        })
+        top_sectors = _top_abs(sector_frame, 'Employment %', n=12)
+
+        col1, col2 = st.columns(2)
+        with col1:
+            st.plotly_chart(
+                plot_pct_change(
+                    _shorten_labels(top_sectors['Sector']),
+                    top_sectors['Value added %'],
+                    var_name=f"Value added for {selected_country}",
+                    xaxis_label="Sectors",
+                    yaxis_label="% change",
+                ),
+                use_container_width=True,
+            )
+        with col2:
+            st.plotly_chart(
+                plot_pct_change(
+                    _shorten_labels(top_sectors['Sector']),
+                    top_sectors['Employment %'],
+                    var_name=f"Employment for {selected_country}",
+                    xaxis_label="Sectors",
+                    yaxis_label="% change",
+                ),
+                use_container_width=True,
+            )
+
+        active_table = _sort_abs(sector_frame, 'Employment %')
+
+else:
+    welfare_frame = country_summary[[
+        'Country',
+        'Name',
+        'Income %',
+        'Price %',
+        'Welfare %',
+        'Baseline income',
+        'Counterfactual income',
+    ]].copy()
+
+    top_welfare = _top_abs(welfare_frame, 'Welfare %', n=18)
+    comparison = welfare_frame.sort_values('Baseline income', ascending=False).head(15)
+
+    col1, col2 = st.columns(2)
+    with col1:
+        st.plotly_chart(
+            plot_baseline_vs_ctf(
+                comparison['Country'],
+                comparison['Baseline income'],
+                comparison['Counterfactual income'],
+                var_name="Income",
+                xaxis_label="Countries",
+                yaxis_label="Income",
+            ),
+            use_container_width=True,
+        )
+    with col2:
+        st.plotly_chart(
+            plot_decomposition(
+                top_welfare['Country'],
+                top_welfare['Income %'],
+                -top_welfare['Price %'],
+                top_welfare['Welfare %'],
+                var_name="Welfare",
+                component_a_name="Income",
+                component_b_name="Prices",
+                xaxis_label="Countries",
+                yaxis_label="% change",
+            ),
+            use_container_width=True,
+        )
+
+    st.plotly_chart(
+        plot_pct_change(
+            top_welfare['Country'],
+            top_welfare['Welfare %'],
+            var_name="Welfare",
+            xaxis_label="Countries",
+            yaxis_label="% change",
+        ),
+        use_container_width=True,
+    )
+
+    active_table = _sort_abs(welfare_frame, 'Welfare %')
+
+
+st.markdown("### Detail table")
+if active_table is not None:
+    table_col, download_col = st.columns([4, 1])
+    with download_col:
+        _download_table(active_table, f"{category.lower()}_results")
+    with table_col:
+        st.caption("Rounded for display. Download the CSV if you want the current slice outside the app.")
+    st.dataframe(_round_frame(active_table), use_container_width=True, hide_index=True)
